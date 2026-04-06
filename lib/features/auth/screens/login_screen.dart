@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
-import '../../../screens/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,157 +11,224 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: "customer@gmail.com");
-  final _passwordController = TextEditingController(text: "customer");
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final auth = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F8FB), // background soft putih kebiruan
-      appBar: AppBar(
-  title: const Text(
-    'Tiket App',
-    style: TextStyle(
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.5,
-    ),
-  ),
-  centerTitle: true,
-  elevation: 0,
-  flexibleSpace: Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [
-          Color(0xFF1976D2), // biru utama
-          Color(0xFF42A5F5), // biru lebih terang
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-    ),
-  ),
-  leading: const Icon(Icons.support_agent),
-),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+
+          /// ================= MOBILE =================
+          if (constraints.maxWidth < 700) {
+            return _mobileView(auth);
+          }
+
+          /// ================= DESKTOP / WEB =================
+          return Row(
+            children: [
+
+              /// ================= LEFT (IMAGE) =================
+              Expanded(
+                flex: 1,
+                child: Container(
+                  color: Colors.grey.shade200,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Image.asset(
+                        'assets/login.jpg',
+                        width: 350,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.support_agent, size: 60, color: Colors.blue),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Helpdesk Login',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Masuk untuk melanjutkan',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 32),
 
-                  // Email
-                  TextField(
-                    controller: _emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: const Icon(Icons.email, color: Colors.blue),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.blue),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
+              /// ================= RIGHT (FORM) =================
+              Expanded(
+                flex: 1,
+                child: Container(
+                  color: const Color(0xFF2F80ED),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
 
-                  const SizedBox(height: 16),
-
-                  // Password
-                  TextField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock, color: Colors.blue),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: const BorderSide(color: Colors.blue),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    obscureText: true,
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 3,
-                      ),
-                      onPressed: authProvider.isLoading
-                          ? null
-                          : () async {
-                              bool success = await authProvider.login(
-                                _emailController.text.trim(),
-                                _passwordController.text.trim(),
-                              );
-                              if (success && context.mounted) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const HomeScreen()),
-                                );
-                              }
-                            },
-                      child: authProvider.isLoading
-                          ? const CircularProgressIndicator(
+                          /// TITLE
+                          const Text(
+                            "WELCOME",
+                            style: TextStyle(
                               color: Colors.white,
-                            )
-                          : const Text(
-                              'LOGIN',
-                              style: TextStyle(fontSize: 18),
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
                             ),
+                          ),
+
+                          const SizedBox(height: 50),
+
+                          /// USERNAME
+                          _inputField(
+                            controller: _emailController,
+                            hint: "Username",
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          /// PASSWORD
+                          _inputField(
+                            controller: _passwordController,
+                            hint: "Password",
+                            isPassword: true,
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          /// BUTTON LOGIN
+                          SizedBox(
+                            width: double.infinity,
+                            height: 55,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4CAF50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                                elevation: 0,
+                              ),
+                              onPressed: auth.isLoading
+                                  ? null
+                                  : () async {
+                                      bool success = await auth.login(
+                                        _emailController.text.trim(),
+                                        _passwordController.text.trim(),
+                                        context,
+                                      );
+
+                                      if (!success && context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text("Login gagal"),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    },
+                              child: auth.isLoading
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white)
+                                  : const Text(
+                                      "SUBMIT",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// ================= INPUT FIELD =================
+  Widget _inputField({
+    required TextEditingController controller,
+    required String hint,
+    bool isPassword = false,
+  }) {
+    return SizedBox(
+      height: 50,
+      child: TextField(
+        controller: controller,
+        obscureText: isPassword,
+        textAlign: TextAlign.center,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.grey),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.9),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
           ),
         ),
       ),
     );
   }
+
+  /// ================= MOBILE VERSION =================
+ Widget _mobileView(AuthProvider auth) {
+  return Container(
+    color: const Color(0xFF2F80ED),
+    padding: const EdgeInsets.all(24),
+    child: Center(
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+
+            const Text(
+              "WELCOME",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            _inputField(
+              controller: _emailController,
+              hint: "Username",
+            ),
+
+            const SizedBox(height: 20),
+
+            _inputField(
+              controller: _passwordController,
+              hint: "Password",
+              isPassword: true,
+            ),
+
+            const SizedBox(height: 30),
+
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                onPressed: () {},
+                child: const Text("SUBMIT"),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 }
