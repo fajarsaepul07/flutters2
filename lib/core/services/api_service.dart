@@ -19,4 +19,19 @@ class ApiService {
     
     return await http.post(url, headers: headers, body: jsonEncode(body));
   }
+
+  // Tambahan: Method GET (ini yang dibutuhkan oleh _fetchHomeData)
+  static Future<http.Response> get(
+    String endpoint, 
+    {String? token}
+  ) async {
+    final url = Uri.parse(AppConstants.baseUrl + endpoint);
+
+    final headers = {
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+    
+    return await http.get(url, headers: headers);
+  }
 }

@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../../screens/home_screen.dart';
@@ -15,6 +16,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _token != null;
 
+  // Login biasa (tidak diubah)
   Future<bool> login(String email, String password, BuildContext context) async {
     _isLoading = true;
     notifyListeners();
@@ -23,15 +25,13 @@ class AuthProvider extends ChangeNotifier {
       final result = await AuthService.login(email, password);
 
       if (result != null) {
-        // Perbaikan utama: Handle dua kemungkinan tipe data
         final userData = result['user'];
 
         if (userData is Map<String, dynamic>) {
           _user = UserModel.fromJson(userData);
         } else if (userData is UserModel) {
-          _user = userData;                    // Sudah berupa UserModel
+          _user = userData;
         } else {
-          // Fallback
           _user = UserModel.fromJson(userData as Map<String, dynamic>);
         }
 
@@ -44,7 +44,6 @@ class AuthProvider extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
 
-        // Navigasi ke HomeScreen
         if (context.mounted) {
           Navigator.pushReplacement(
             context,
@@ -55,6 +54,51 @@ class AuthProvider extends ChangeNotifier {
       }
     } catch (e) {
       print('Login error: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // LOGIN GOOGLE BARU (sama seperti Laravel)
+  Future<bool> googleLogin(BuildContext context) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await AuthService.googleLogin();
+
+      if (result != null) {
+        final userData = result['user'];
+
+        if (userData is Map<String, dynamic>) {
+          _user = UserModel.fromJson(userData);
+        } else if (userData is UserModel) {
+          _user = userData;
+        } else {
+          _user = UserModel.fromJson(userData as Map<String, dynamic>);
+        }
+
+        _token = result['token'] as String?;
+
+        if (_token != null) {
+          await SharedPrefs.saveToken(_token!);
+        }
+
+        _isLoading = false;
+        notifyListeners();
+
+        if (context.mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+        return true;
+      }
+    } catch (e) {
+      print('Google login error: $e');
     }
 
     _isLoading = false;
