@@ -21,19 +21,14 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-
-          /// ================= MOBILE =================
           if (constraints.maxWidth < 700) {
             return _mobileView(auth);
           }
 
-          /// ================= DESKTOP / WEB =================
           return Row(
             children: [
-
-              /// ================= LEFT (IMAGE) =================
+              /// LEFT IMAGE
               Expanded(
-                flex: 1,
                 child: Container(
                   color: Colors.grey.shade200,
                   child: Center(
@@ -49,9 +44,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              /// ================= RIGHT (FORM) =================
+              /// RIGHT FORM
               Expanded(
-                flex: 1,
                 child: Container(
                   color: const Color(0xFF2F80ED),
                   child: Center(
@@ -60,8 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-
-                          /// TITLE
                           const Text(
                             "WELCOME",
                             style: TextStyle(
@@ -71,70 +63,22 @@ class _LoginScreenState extends State<LoginScreen> {
                               letterSpacing: 2,
                             ),
                           ),
-
                           const SizedBox(height: 50),
 
-                          /// USERNAME
                           _inputField(
                             controller: _emailController,
-                            hint: "Username",
+                            hint: "Email",
                           ),
-
                           const SizedBox(height: 20),
 
-                          /// PASSWORD
                           _inputField(
                             controller: _passwordController,
                             hint: "Password",
                             isPassword: true,
                           ),
-
                           const SizedBox(height: 30),
 
-                          /// BUTTON LOGIN
-                          SizedBox(
-                            width: double.infinity,
-                            height: 55,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4CAF50),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                elevation: 0,
-                              ),
-                              onPressed: auth.isLoading
-                                  ? null
-                                  : () async {
-                                      bool success = await auth.login(
-                                        _emailController.text.trim(),
-                                        _passwordController.text.trim(),
-                                        context,
-                                      );
-
-                                      if (!success && context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text("Login gagal"),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    },
-                              child: auth.isLoading
-                                  ? const CircularProgressIndicator(
-                                      color: Colors.white)
-                                  : const Text(
-                                      "SUBMIT",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
-                            ),
-                          ),
+                          _loginButton(auth),
                         ],
                       ),
                     ),
@@ -148,7 +92,60 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// ================= INPUT FIELD =================
+  /// ================= BUTTON LOGIN =================
+  Widget _loginButton(AuthProvider auth) {
+    return SizedBox(
+      width: double.infinity,
+      height: 55,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF4CAF50),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+        ),
+        onPressed: auth.isLoading
+            ? null
+            : () async {
+                if (_emailController.text.isEmpty ||
+                    _passwordController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Email dan password wajib diisi"),
+                    ),
+                  );
+                  return;
+                }
+
+                bool success = await auth.login(
+                  _emailController.text.trim(),
+                  _passwordController.text.trim(),
+                  context,
+                );
+
+                if (!success && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Login gagal"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+        child: auth.isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text(
+                "SUBMIT",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+      ),
+    );
+  }
+
+  /// ================= INPUT =================
   Widget _inputField({
     required TextEditingController controller,
     required String hint,
@@ -162,7 +159,6 @@ class _LoginScreenState extends State<LoginScreen> {
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Colors.grey),
           filled: true,
           fillColor: Colors.white.withOpacity(0.9),
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -175,60 +171,43 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// ================= MOBILE VERSION =================
- Widget _mobileView(AuthProvider auth) {
-  return Container(
-    color: const Color(0xFF2F80ED),
-    padding: const EdgeInsets.all(24),
-    child: Center(
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-
-            const Text(
-              "WELCOME",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            _inputField(
-              controller: _emailController,
-              hint: "Username",
-            ),
-
-            const SizedBox(height: 20),
-
-            _inputField(
-              controller: _passwordController,
-              hint: "Password",
-              isPassword: true,
-            ),
-
-            const SizedBox(height: 30),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4CAF50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
+  /// ================= MOBILE =================
+  Widget _mobileView(AuthProvider auth) {
+    return Container(
+      color: const Color(0xFF2F80ED),
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const Text(
+                "WELCOME",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
                 ),
-                onPressed: () {},
-                child: const Text("SUBMIT"),
               ),
-            ),
-          ],
+              const SizedBox(height: 30),
+
+              _inputField(
+                controller: _emailController,
+                hint: "Email",
+              ),
+              const SizedBox(height: 20),
+
+              _inputField(
+                controller: _passwordController,
+                hint: "Password",
+                isPassword: true,
+              ),
+              const SizedBox(height: 30),
+
+              _loginButton(auth), // 🔥 PAKAI FUNCTION YANG SAMA
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

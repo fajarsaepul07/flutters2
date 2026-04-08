@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../features/auth/providers/auth_provider.dart';
-import '../core/constants/app_constants.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../core/services/api_service.dart';
 
@@ -28,16 +26,39 @@ class Tiket {
   });
 
   factory Tiket.fromJson(Map<String, dynamic> json) {
+    final kategori = json['kategori'] is Map
+        ? json['kategori']['nama_kategori']
+        : null;
+
+    final status = json['status'] is Map
+        ? json['status']['nama_status']
+        : null;
+
+    String tanggal = '';
+    if (json['waktu_dibuat'] != null) {
+      final raw = json['waktu_dibuat'].toString();
+      tanggal = raw.length >= 16
+          ? raw.substring(0, 16).replaceAll('T', ' ')
+          : raw;
+    }
+
+    String ditangani = '-';
+    if (json['assignedTo'] is Map) {
+      ditangani = json['assignedTo']['name'] ?? '-';
+    } else if (json['assigned_to'] is Map) {
+      ditangani = json['assigned_to']['name'] ?? '-';
+    } else if (json['assignedTo_name'] != null) {
+      ditangani = json['assignedTo_name'];
+    }
+
     return Tiket(
       tiketId: json['tiket_id'] ?? 0,
       kodeTiket: json['kode_tiket'] ?? '',
       judul: json['judul'] ?? '',
-      kategori: json['kategori']?['nama_kategori'] ?? '-',
-      status: json['status']?['nama_status'] ?? 'Pending',
-      tanggal: json['waktu_dibuat'] != null
-          ? json['waktu_dibuat'].toString().substring(0, 16).replaceAll('T', ' ')
-          : '',
-      ditangani: json['assignedTo']?['name'] ?? '-',
+      kategori: kategori ?? '-',
+      status: status ?? 'Pending',
+      tanggal: tanggal,
+      ditangani: ditangani,
     );
   }
 }
@@ -51,7 +72,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Tiket> tikets = [];
-  Map<String, dynamic> stats = {'total': 0, 'selesai': 0, 'diproses': 0, 'ditolak': 0};
+  bool isLoading = true;
 
   final List<Map<String, dynamic>> _kategoris = [
     {'id': 1, 'nama': 'Hardware'},
@@ -61,9 +82,13 @@ class _HomeScreenState extends State<HomeScreen> {
     {'id': 5, 'nama': 'Lainnya'},
   ];
 
-  bool isLoading = true;
+  @override
+  void initState() {
+    super.initState();
+    _fetchHomeData();
+  }
 
-    Future<void> _fetchHomeData() async {
+  Future<void> _fetchHomeData() async {
     if (!mounted) return;
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -75,23 +100,15 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final response = await ApiService.get('/home', token: token);
 
-      if (response.statusCode == 200 && mounted) {
+      if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final s = data['stats'] ?? {};
+        final List list = data['recent_tikets'] ?? [];
 
         setState(() {
-          stats = {
-            'total': s['total'] ?? 0,
-            'selesai': s['selesai'] ?? 0,
-            'diproses': s['diproses'] ?? 0,
-            'ditolak': s['ditolak'] ?? 0,
-          };
-          tikets = (data['recent_tikets'] as List? ?? [])
-              .map((e) => Tiket.fromJson(e))
-              .toList();
+          tikets = list.map((e) => Tiket.fromJson(e)).toList();
           isLoading = false;
         });
-      } else if (mounted) {
+      } else {
         setState(() => isLoading = false);
       }
     } catch (e) {
@@ -99,38 +116,58 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-    Future<void> _createTiket(int kategoriId, String judul, String deskripsi) async {
+  Future<void> _createTiket(
+      int kategoriId, String judul, String deskripsi) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final token = auth.token;
     if (token == null) return;
 
-    try {
-      final response = await ApiService.post(
-        '/tikets',
-        {
-          'kategori_id': kategoriId,
-          'judul': judul,
-          'deskripsi': deskripsi,
-        },
-        token: token,
-      );
+    final response = await ApiService.post(
+      '/tikets',
+      {
+        'kategori_id': kategoriId,
+        'judul': judul,
+        'deskripsi': deskripsi,
+      },
+      token: token,
+    );
 
-      if ((response.statusCode == 200 || response.statusCode == 201) && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tiket berhasil dibuat ✓'), backgroundColor: Colors.green),
-        );
-        _fetchHomeData();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: ${response.statusCode}'), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      _fetchHomeData();
+    }
+  }
+
+  Future<void> _deleteTiket(int tiketId) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.token;
+    if (token == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus Tiket?'),
+        content: const Text('Tiket ini akan dihapus secara permanen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final response =
+        await ApiService.delete('/tikets/$tiketId', token: token);
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      _fetchHomeData();
     }
   }
 
@@ -141,280 +178,292 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Buat Tiket Baru'),
+      builder: (_) => AlertDialog(
+        title: const Text('Buat Tiket'),
         content: StatefulBuilder(
-          builder: (context, setStateDialog) => SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Kategori'),
-                  value: selectedKategoriId,
-                  items: _kategoris.map((k) => DropdownMenuItem<int>(
-                        value: k['id'] as int,
-                        child: Text(k['nama'] as String),
-                      )).toList(),
-                  onChanged: (val) => setStateDialog(() => selectedKategoriId = val),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: judulController,
-                  decoration: const InputDecoration(labelText: 'Judul Tiket'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: deskripsiController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Deskripsi'),
-                ),
-              ],
-            ),
+          builder: (context, setStateDialog) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                value: selectedKategoriId,
+                decoration: const InputDecoration(labelText: 'Kategori'),
+                items: _kategoris.map((k) {
+                  return DropdownMenuItem<int>(
+                    value: k['id'],
+                    child: Text(k['nama']),
+                  );
+                }).toList(),
+                onChanged: (val) =>
+                    setStateDialog(() => selectedKategoriId = val),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: judulController,
+                decoration: const InputDecoration(labelText: 'Judul'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: deskripsiController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Deskripsi'),
+              ),
+            ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
           ElevatedButton(
             onPressed: () {
-              if (selectedKategoriId == null || judulController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Kategori dan Judul wajib diisi')),
-                );
-                return;
-              }
+              if (selectedKategoriId == null ||
+                  judulController.text.trim().isEmpty) return;
+
               Navigator.pop(context);
+
               _createTiket(
                 selectedKategoriId!,
                 judulController.text.trim(),
                 deskripsiController.text.trim(),
               );
             },
-            child: const Text('Buat Tiket'),
+            child: const Text('Simpan'),
           ),
         ],
-      ),
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchHomeData());
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthProvider>(context);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        title: const Text('Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await auth.logout();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetchHomeData,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1100),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // HEADER
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('📋 Tiket Saya', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                                SizedBox(height: 4),
-                                Text('Kelola dan pantau semua tiket bantuan Anda',
-                                    style: TextStyle(color: Colors.grey)),
-                              ],
-                            ),
-                            Flexible(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _btn('Riwayat', Colors.orange),
-                                  const SizedBox(width: 8),
-                                  _btn('Buat Tiket', Colors.blue, onPressed: _showCreateTiketDialog),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // STAT
-                        Row(
-                          children: [
-                            _stat('Total Tiket', stats['total'], Icons.confirmation_number, Colors.blue),
-                            const SizedBox(width: 16),
-                            _stat('Selesai', stats['selesai'], Icons.check_circle, Colors.green),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            _stat('Diproses', stats['diproses'], Icons.timer, Colors.orange),
-                            const SizedBox(width: 16),
-                            _stat('Ditolak', stats['ditolak'], Icons.cancel, Colors.red),
-                          ],
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        // TABLE
-                        Container(
-                          decoration: _card(),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text('Daftar Tiket Terbaru', style: TextStyle(fontWeight: FontWeight.w600)),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: Colors.blue, borderRadius: BorderRadius.circular(20)),
-                                      child: Text('${tikets.length} tiket', style: const TextStyle(color: Colors.white)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Divider(height: 1),
-                              if (tikets.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.all(40),
-                                  child: Column(
-                                    children: [
-                                      Text('Belum Ada Tiket', style: TextStyle(fontWeight: FontWeight.w600)),
-                                      SizedBox(height: 6),
-                                      Text('Silakan buat tiket baru', style: TextStyle(color: Colors.grey)),
-                                    ],
-                                  ),
-                                )
-                              else
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                    columnSpacing: 30,
-                                    headingRowColor: MaterialStateProperty.all(const Color(0xFFF8F9FA)),
-                                    columns: const [
-                                      DataColumn(label: Text('Kode & Judul')),
-                                      DataColumn(label: Text('Kategori')),
-                                      DataColumn(label: Text('Status')),
-                                      DataColumn(label: Text('Tanggal')),
-                                      DataColumn(label: Text('Ditangani')),
-                                    ],
-                                    rows: tikets.map((t) => DataRow(cells: [
-                                      DataCell(Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('#${t.kodeTiket}', style: const TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
-                                          Text(t.judul),
-                                        ],
-                                      )),
-                                      DataCell(_badge(t.kategori, Colors.cyan)),
-                                      DataCell(_badge(t.status, Colors.grey)),
-                                      DataCell(Text(t.tanggal)),
-                                      DataCell(Text(t.ditangani)),
-                                    ])).toList(),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _btn(String text, Color color, {VoidCallback? onPressed}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      ),
-      onPressed: onPressed ?? () {},
-      child: Text(text, style: const TextStyle(fontSize: 14)),
-    );
-  }
-
-  BoxDecoration _card() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-    );
-  }
-
-  Widget _stat(String title, int value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: _card(),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
-                Text(value.toString(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
 
   Widget _badge(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 12)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _statCard(
+      String title, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xfff5f6fa),
+      appBar: AppBar(title: const Text('Home')),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+               Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Tiket Saya',
+          style: TextStyle(
+              fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 4),
+        Text(
+          'Kelola dan pantau semua tiket bantuan Anda',
+          style: TextStyle(color: Colors.grey),
+        ),
+      ],
+    ),
+    ElevatedButton.icon(
+      onPressed: _showCreateTiketDialog,
+      icon: const Icon(Icons.add),
+      label: const Text('Buat Tiket Baru'),
+    )
+  ],
+),
+                const SizedBox(height: 20),
+
+                Row(
+                  children: [
+                    _statCard('TOTAL', tikets.length.toString(),
+                        Icons.confirmation_number, Colors.blue),
+                    _statCard(
+                        'SELESAI', '1', Icons.check_circle, Colors.green),
+                    _statCard('DIPROSES', '0',
+                        Icons.access_time, Colors.orange),
+                    _statCard(
+                        'DITOLAK', '0', Icons.cancel, Colors.red),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                Column(
+  children: [
+    /// HEADER
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Daftar Tiket Terbaru',
+          style: TextStyle(
+              fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.blue,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '${tikets.length} tiket',
+            style: const TextStyle(color: Colors.white),
+          ),
+        )
+      ],
+    ),
+
+    const SizedBox(height: 10),
+
+    /// TABLE
+    Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        children: [
+
+          /// TABLE HEADER
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.grey.shade100,
+            child: Row(
+              children: const [
+                Expanded(flex: 3, child: Text('KODE & JUDUL')),
+                Expanded(flex: 2, child: Text('KATEGORI')),
+                Expanded(flex: 2, child: Text('STATUS')),
+                Expanded(flex: 2, child: Text('TANGGAL')),
+                Expanded(flex: 2, child: Text('DITANGANI')),
+                SizedBox(width: 60),
+              ],
+            ),
+          ),
+
+          /// DATA
+          ...tikets.map((t) => Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+                child: Row(
+                  children: [
+
+                    /// KODE & JUDUL
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '#${t.kodeTiket}',
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(t.judul),
+                        ],
+                      ),
+                    ),
+
+                    /// KATEGORI
+                    Expanded(
+                      flex: 2,
+                      child: _badge(t.kategori, Colors.cyan),
+                    ),
+
+                    /// STATUS
+                    Expanded(
+                      flex: 2,
+                      child: _badge(t.status, Colors.grey),
+                    ),
+
+                    /// TANGGAL
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        t.tanggal.replaceAll(' ', '\n'),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+
+                    /// DITANGANI
+                    Expanded(
+                      flex: 2,
+                      child: Text(t.ditangani),
+                    ),
+
+                    /// AKSI DELETE
+                    SizedBox(
+                      width: 60,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete,
+                            color: Colors.red),
+                        onPressed: () =>
+                            _deleteTiket(t.tiketId),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    ),
+  ],
+),
+              ],
+            ),
     );
   }
 }
