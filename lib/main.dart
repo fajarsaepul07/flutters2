@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/utils/shared_prefs.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'screens/home_screen.dart';   // ← Tambahkan import ini
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,13 +24,20 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Tiket App',
-        home: const AuthWrapper(),   // ← Ganti dari LoginScreen ke AuthWrapper
+
+        // 🔥 TAMBAHKAN INI
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const AuthWrapper(),
+          '/login': (context) => const LoginScreen(),
+          '/home': (context) => const HomeScreen(),
+        },
       ),
     );
   }
 }
 
-// Widget baru ini mengecek apakah user sudah login atau belum
+// Tetap pakai AuthWrapper kamu
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -38,12 +45,10 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
 
-    // Jika sudah ada token → langsung ke HomeScreen
+    // Jika sudah login
     if (auth.isLoggedIn) {
       return const HomeScreen();
     }
-
-    // Jika belum login → ke LoginScreen
     return const LoginScreen();
   }
 }

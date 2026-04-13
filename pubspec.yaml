@@ -30,11 +30,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.2
+  http: ^1.6.0
   shared_preferences: ^2.3.2
-  provider: ^6.1.2
+  provider: ^6.1.5+1
   fluttertoast: ^8.2.8
-  google_sign_in: ^6.2.1   # ← ini yang ditambahkanq
+  google_sign_in: ^6.2.1 
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +60,7 @@ flutter:
   
   assets:
     - assets/login.jpg
+    - assets/icons/google.png
  
   # To add assets to your application, add an assets section, like this:
   # assets:
