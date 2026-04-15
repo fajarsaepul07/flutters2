@@ -119,55 +119,31 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchHomeData();
   }
 
- Future<void> _fetchHomeData() async {
-  if (!mounted) return;
+  Future<void> _fetchHomeData() async {
+    if (!mounted) return;
+    final auth  = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.token;
+    if (token == null) { setState(() => isLoading = false); return; }
 
-  final auth = Provider.of<AuthProvider>(context, listen: false);
-  final token = auth.token;
-  if (token == null) {
-    setState(() => isLoading = false);
-    return;
-  }
-
-  setState(() => isLoading = true);
-
-  try {
-    final response = await ApiService.get('/home', token: token);
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-
-      // === RECENT TIKETS (tetap sama) ===
-      final List<dynamic> recentList = data['recent_tikets'] ?? [];
-      tikets = recentList
-          .map((e) => Tiket.fromJson(e as Map<String, dynamic>))
-          .toList();
-
-      // === STATS DARI BACKEND (INI YANG PALING PENTING) ===
-      final stats = data['stats'] ?? {};
-
-      setState(() {
-        totalTiket   = stats['total_tiket']     ?? tikets.length;
-        selesaiTiket = stats['tiket_selesai']   ?? 0;
-        prosesTiket  = stats['tiket_proses']    ?? 0;
-        
-        // Backend pakai 'tiket_baru' untuk Pending
-        ditolakTiket = stats['tiket_ditolak']   ?? 0; 
-        
-        // Jika backend tidak kirim 'tiket_ditolak', fallback ke perhitungan manual
-        if (ditolakTiket == 0) {
-          ditolakTiket = tikets.where((t) => 
-            t.status.toLowerCase().contains('ditolak')).length;
-        }
-      });
+    setState(() => isLoading = true);
+    try {
+      final response = await ApiService.get('/home', token: token);
+      if (response.statusCode == 200) {
+        final data  = json.decode(response.body);
+        final List<dynamic> list = data['recent_tikets'] ?? [];
+        tikets      = list.map((e) => Tiket.fromJson(e as Map<String, dynamic>)).toList();
+        final stats = data['stats'] ?? {};
+        totalTiket   = stats['total_tiket']    ?? 0;
+        selesaiTiket = stats['tiket_selesai']  ?? 0;
+        prosesTiket  = stats['tiket_proses']   ?? 0;
+        ditolakTiket = stats['tiket_ditolak']  ?? 0;
+      }
+    } catch (e) {
+      debugPrint('Error fetch home: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
-  } catch (e) {
-    debugPrint('Error fetch home: $e');
-    // Optional: Tampilkan toast error
-  } finally {
-    if (mounted) setState(() => isLoading = false);
   }
-}
 
   Future<void> _createTiket(int kategoriId, String judul, String deskripsi) async {
     final auth  = Provider.of<AuthProvider>(context, listen: false);
@@ -217,16 +193,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (confirm != true) return;
     final response = await ApiService.delete('/tikets/$tiketId', token: token);
     if (response.statusCode == 200 || response.statusCode == 204) _fetchHomeData();
-  }
-
-  // ================== LOGOUT ==================
-  Future<void> _logout() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    await auth.logout();
-
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
-    }
   }
 
   void _showCreateTiketDialog() {
@@ -316,37 +282,35 @@ class _HomeScreenState extends State<HomeScreen> {
       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _textPrimary));
 
   // ─── Stat card ────────────────────────────────────────────────────────────
-  Widget _statCard(String label, String value, IconData icon, Color iconBg, Color iconFg, {double? marginRight}) {
-    return Container(
-      margin: EdgeInsets.only(right: marginRight ?? 10),
-      child: IntrinsicWidth(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: _cardBg,
-            borderRadius: BorderRadius.circular(_radius),
-            border: Border.all(color: _borderColor, width: 0.8),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: iconFg, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(fontSize: 10, color: _textMuted,
-                      letterSpacing: 0.5, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  Text(value, style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w600, color: _textPrimary)),
-                ],
-              ),
-            ],
-          ),
+  Widget _statCard(String label, String value, IconData icon, Color iconBg, Color iconFg) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.circular(_radius),
+          border: Border.all(color: _borderColor, width: 0.8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: iconFg, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 10, color: _textMuted,
+                    letterSpacing: 0.5, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w600, color: _textPrimary)),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -388,54 +352,16 @@ class _HomeScreenState extends State<HomeScreen> {
           preferredSize: const Size.fromHeight(0.5),
           child: Container(height: 0.5, color: _borderColor),
         ),
-        // ================== TOMBOL LOGOUT ==================
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            tooltip: 'Logout',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
-                  title: const Text('Logout'),
-                  content: const Text('Apakah Anda yakin ingin keluar?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Batal', style: TextStyle(color: Color(0xFF6B7280))),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _logout();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFDC2626),
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('Ya, Logout'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
       ),
-      body: SafeArea(
-        child: isLoading
-            ? const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2))
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final horizontalPadding = (constraints.maxWidth * 0.05).clamp(12.0, 28.0);
-                  return RefreshIndicator(
-                    onRefresh: _fetchHomeData,
-                    color: _primary,
-                    child: ListView(
-                      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 16),
-                      children: [
-                  // ── Page header (tidak diubah)
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator(color: _primary, strokeWidth: 2))
+          : RefreshIndicator(
+              onRefresh: _fetchHomeData,
+              color: _primary,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  // ── Page header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,60 +394,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(height: 20),
 
-                  LayoutBuilder(
-                    builder: (context, statConstraints) {
-                      final isWide = statConstraints.maxWidth > 500;
-                      if (isWide) {
-                        return Row(
-                          children: [
-                            _statCard('TOTAL', tikets.length.toString(),
-                                Icons.confirmation_number_outlined,
-                                const Color(0xFFEEF2FF), _primary, marginRight: 10),
-                            _statCard('SELESAI', selesaiTiket.toString(),
-                                Icons.check_circle_outline,
-                                const Color(0xFFD1FAE5), const Color(0xFF065F46), marginRight: 10),
-                            _statCard('DIPROSES', prosesTiket.toString(),
-                                Icons.access_time_outlined,
-                                const Color(0xFFFFF7ED), const Color(0xFF92400E), marginRight: 10),
-                            Expanded(child: _statCard('DITOLAK', ditolakTiket.toString(),
-                                Icons.cancel_outlined,
-                                const Color(0xFFFEE2E2), const Color(0xFF991B1B))),
-                          ],
-                        );
-                      } else {
-                        return Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: _statCard('TOTAL', tikets.length.toString(),
-                                    Icons.confirmation_number_outlined,
-                                    const Color(0xFFEEF2FF), _primary)),
-                                const SizedBox(width: 10),
-                                Expanded(child: _statCard('SELESAI', selesaiTiket.toString(),
-                                    Icons.check_circle_outline,
-                                    const Color(0xFFD1FAE5), const Color(0xFF065F46))),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(child: _statCard('DIPROSES', prosesTiket.toString(),
-                                    Icons.access_time_outlined,
-                                    const Color(0xFFFFF7ED), const Color(0xFF92400E))),
-                                const SizedBox(width: 10),
-                                Expanded(child: _statCard('DITOLAK', ditolakTiket.toString(),
-                                    Icons.cancel_outlined,
-                                    const Color(0xFFFEE2E2), const Color(0xFF991B1B))),
-                              ],
-                            ),
-                          ],
-                        );
-                      }
-                    },
+                  // ── Stat cards
+                  Row(
+                    children: [
+                      _statCard('TOTAL', tikets.length.toString(),
+                          Icons.confirmation_number_outlined,
+                          const Color(0xFFEEF2FF), _primary),
+                      _statCard('SELESAI', selesaiTiket.toString(),
+                          Icons.check_circle_outline,
+                          const Color(0xFFD1FAE5), const Color(0xFF065F46)),
+                      _statCard('DIPROSES', prosesTiket.toString(),
+                          Icons.access_time_outlined,
+                          const Color(0xFFFFF7ED), const Color(0xFF92400E)),
+                      _statCard('DITOLAK', ditolakTiket.toString(),
+                          Icons.cancel_outlined,
+                          const Color(0xFFFEE2E2), const Color(0xFF991B1B)),
+                    ],
                   ),
 
                   const SizedBox(height: 24),
 
+                  // ── Section header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -543,211 +436,199 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Table (semua code tabel kamu tetap sama persis)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _cardBg,
-                      border: Border.all(color: _borderColor, width: 0.8),
-                      borderRadius: BorderRadius.circular(_radius),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(_radius)),
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, headerConstraints) {
-                              if (headerConstraints.maxWidth < 450) {
-                                return SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: const [
-                                      Expanded(flex: 3, child: _TH('KODE & JUDUL')),
-                                      Expanded(flex: 2, child: _TH('KATEGORI')),
-                                      Expanded(flex: 2, child: _TH('STATUS')),
-                                      Expanded(flex: 2, child: _TH('TANGGAL')),
-                                      Expanded(flex: 2, child: _TH('DITANGANI')),
-                                      SizedBox(width: 52),
-                                    ],
-                                  ),
-                                );
-                              }
-                              return Row(
-                                children: const [
-                                  Expanded(flex: 3, child: _TH('KODE & JUDUL')),
-                                  Expanded(flex: 2, child: _TH('KATEGORI')),
-                                  Expanded(flex: 2, child: _TH('STATUS')),
-                                  Expanded(flex: 2, child: _TH('TANGGAL')),
-                                  Expanded(flex: 2, child: _TH('DITANGANI')),
-                                  SizedBox(width: 52),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
+                 // ── Table
+SingleChildScrollView(
+  scrollDirection: Axis.horizontal,
+  child: ConstrainedBox(
+    constraints: const BoxConstraints(minWidth: 900),
+    child: Container(
+      decoration: BoxDecoration(
+        color: _cardBg,
+        border: Border.all(color: _borderColor, width: 0.8),
+        borderRadius: BorderRadius.circular(_radius),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(_radius)),
+            ),
+            child: Row(
+              children: const [
+                Expanded(flex: 3, child: _TH('KODE & JUDUL')),
+                Expanded(flex: 2, child: _TH('KATEGORI')),
+                Expanded(flex: 2, child: _TH('STATUS')),
+                Expanded(flex: 2, child: _TH('TANGGAL')),
+                Expanded(flex: 2, child: _TH('DITANGANI')),
+                SizedBox(width: 52),
+              ],
+            ),
+          ),
 
-                        if (tikets.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
-                            child: Center(
-                              child: Text('Belum ada tiket',
-                                  style: TextStyle(fontSize: 13, color: _textMuted)),
-                            ),
-                          ),
-
-                        ...tikets.asMap().entries.map((entry) {
-                          final t   = entry.value;
-                          final idx = entry.key;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                top: BorderSide(
-                                  color: idx == 0 ? _borderColor : const Color(0xFFF3F4F6),
-                                  width: 0.8,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                // Kode & judul
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '#${t.kodeTiket}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: _primary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                        softWrap: false,
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        t.judul,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        softWrap: true,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: _textPrimary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Kategori
-                                Expanded(
-                                  flex: 2,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Flexible(
-                                      child: _categoryBadge(
-                                        t.kategori.isEmpty ? '-' : t.kategori,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                // Status
-                                Expanded(
-                                  flex: 2,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Flexible(
-                                      child: _statusBadge(
-                                        t.status.isEmpty ? 'Pending' : t.status,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                                // Tanggal
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    t.tanggal.isEmpty ? '-' : t.tanggal.replaceAll(' ', '\n'),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    softWrap: true,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF6B7280),
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-
-                                // Ditangani
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    t.ditangani.isEmpty ? '-' : t.ditangani,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    softWrap: true,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: t.ditangani == '-' 
-                                          ? FontWeight.normal 
-                                          : FontWeight.w500,
-                                      color: t.ditangani == '-' 
-                                          ? _textMuted 
-                                          : _textPrimary,
-                                    ),
-                                  ),
-                                ),
-
-                                // Hapus
-                                LayoutBuilder(
-                                  builder: (context, rowConstraints) {
-                                    final buttonWidth = (rowConstraints.maxWidth * 0.12).clamp(44.0, 60.0);
-                                    return SizedBox(
-                                      width: buttonWidth,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: InkWell(
-                                          borderRadius: BorderRadius.circular(7),
-                                          onTap: () => _deleteTiket(t.tiketId),
-                                          child: Container(
-                                            width: 30,
-                                            height: 30,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFFF5F5),
-                                              borderRadius: BorderRadius.circular(7),
-                                              border: Border.all(
-                                                color: const Color(0xFFFECACA),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: const Icon(
-                                              Icons.delete_outline,
-                                              size: 15,
-                                              color: Color(0xFFDC2626),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),\n                  const SizedBox(height: 24),\n                ],
+          // Kosong
+          if (tikets.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  'Belum ada tiket',
+                  style: TextStyle(fontSize: 13, color: _textMuted),
+                ),
               ),
             ),
+
+          // Data
+          ...tikets.asMap().entries.map((entry) {
+            final t = entry.value;
+            final idx = entry.key;
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: idx == 0 ? _borderColor : const Color(0xFFF3F4F6),
+                    width: 0.8,
+                  ),
+                ),
+              ),
+
+              // ✅ ROW FIXED
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Kode & Judul
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '#${t.kodeTiket}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: _primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          t.judul,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: _textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Kategori (FIXED)
+                  Expanded(
+                    flex: 2,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _categoryBadge(
+                        t.kategori.isEmpty ? '-' : t.kategori,
+                      ),
+                    ),
+                  ),
+
+                  // Status (FIXED)
+                  Expanded(
+                    flex: 2,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _statusBadge(
+                        t.status.isEmpty ? 'Pending' : t.status,
+                      ),
+                    ),
+                  ),
+
+                  // Tanggal
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      t.tanggal.isEmpty ? '-' : t.tanggal.replaceAll(' ', '\n'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+
+                  // Ditangani
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      t.ditangani.isEmpty ? '-' : t.ditangani,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: t.ditangani == '-'
+                            ? FontWeight.normal
+                            : FontWeight.w500,
+                        color: t.ditangani == '-'
+                            ? _textMuted
+                            : _textPrimary,
+                      ),
+                    ),
+                  ),
+
+                  // Hapus
+                  SizedBox(
+                    width: 52,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(7),
+                        onTap: () => _deleteTiket(t.tiketId),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF5F5),
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(
+                              color: const Color(0xFFFECACA),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            size: 15,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    ),
+  ),
+),
+
+const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          
     );
   }
 }
