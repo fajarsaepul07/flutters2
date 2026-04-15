@@ -174,6 +174,18 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 12),
 
         _googleLoginButton(auth, isDark),
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            "Belum punya akun? Gunakan akun Google Anda",
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white60 : _textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ],
     );
   }
